@@ -10,6 +10,7 @@ import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.FileTime;
 import java.util.regex.*;
+import java.nio.file.NoSuchFileException;
 
 public class SyncCheckedSongs {
 	public final static String DEFAULT_LIBRARY_PATH = "/iTunes Music";
@@ -81,6 +82,8 @@ public class SyncCheckedSongs {
 			}
 		}
 		
+		keyboard.close();
+		
 		//System.out.println(iTunesPath + "\n" + syncPath + "\n" + iTunesMusicPath);
 		
 		
@@ -147,12 +150,14 @@ public class SyncCheckedSongs {
 							//This is a file
 							if(library.containsKey(currentFile)) {
 								//file is in the library - check date modified to see if it needs to be replaced
-								FileTime lastModified = Files.getLastModifiedTime(file);
-								Path iTunesFile = Paths.get(fromPath + currentFile);
-								FileTime iTunesLastModified = Files.getLastModifiedTime(iTunesFile);
-								if(iTunesLastModified.compareTo(lastModified) > 0) {
-									Files.copy(iTunesFile, file, StandardCopyOption.REPLACE_EXISTING);
-								}
+								try{
+									FileTime lastModified = Files.getLastModifiedTime(file);
+									Path iTunesFile = Paths.get(fromPath + currentFile);
+									FileTime iTunesLastModified = Files.getLastModifiedTime(iTunesFile);
+									if(iTunesLastModified.compareTo(lastModified) > 0) {
+											Files.copy(iTunesFile, file, StandardCopyOption.REPLACE_EXISTING);
+									}
+								}catch(NoSuchFileException f){System.out.println("Sync Error: " + f);}
 								//when finished, remove it from the library
 								library.remove(currentFile);
 							}else {
@@ -179,8 +184,11 @@ public class SyncCheckedSongs {
 					syncFiles(subLibrary, newFromPath, newToPath);
 				}else {
 					//this is a file - copy it
-					//System.out.println("Copying " + newToPath);
-					Files.copy(Paths.get(newFromPath), Paths.get(newToPath));
+					try{
+						//System.out.println(Files.exists(Paths.get(newToPath)));
+						Files.copy(Paths.get(newFromPath), Paths.get(newToPath));
+						//System.out.println("Copying " + newToPath);
+					}catch(NoSuchFileException f){System.out.println("Sync Error: " + f);}
 				}
 			}
 		}catch(Exception e) {System.out.println("Sync Error: " + e);}
@@ -202,9 +210,11 @@ public class SyncCheckedSongs {
 			String line = fileLines.readLine();
 			int dictLevel = 0;
 			boolean skip = false;
+			boolean firstFile = true;
 			Pattern keyPattern = Pattern.compile(".*<key>(.*)</key>.*");
 			Pattern locationPattern = Pattern.compile(".*(\\w:.*)<.*");
-			Pattern subLocationPattern = Pattern.compile(libraryPath + "(.*)");
+			//Pattern subLocationPattern = Pattern.compile(libraryPath + "(.*)");
+			Pattern subLocationPattern = null;
 			Pattern pathPattern = Pattern.compile("([^/]+/?)");
 			while(line != null) {
 				if(line.contains("<dict>")) {
@@ -240,16 +250,41 @@ public class SyncCheckedSongs {
 								location = location.replace("&#60;", "<");
 								location = location.replace("&#62;", ">");
 								//convert uri to path string
-								//store the drive if not on a unix-like system because URI conversion removes it
-								String drive = "";
-								if(location.charAt(0) != '/')
-									drive = location.substring(0,2);
 								try {
 									//convert and add the drive back
-									location = drive + (new URI(location).getPath());
+									location = (new URI(location).getPath());
 								}catch(URISyntaxException u) {
 									line = fileLines.readLine();
 									continue;
+								}
+								if(firstFile){
+									//set up the subLocationPattern
+									//find the name of the directory storing the library
+									Pattern libraryFolderPattern = Pattern.compile(".*/(.[^/]*/)$");
+									m = libraryFolderPattern.matcher(libraryPath);
+									m.matches();
+									String libraryFolder = m.group(1);
+									//System.out.println("library folder is " + libraryFolder);
+									//find the path of the library folder relative to the full path in iTunes
+									Pattern findLibraryFolderInLocation = Pattern.compile("(.*" + libraryFolder + ").*");
+									m = findLibraryFolderInLocation.matcher(location);
+									String libraryPathCandidate = "";
+									boolean found = false;
+									while(m.find()){
+										libraryPathCandidate = m.group(1);
+										//System.out.println(libraryPathCandidate);
+										if(libraryPath.contains(libraryPathCandidate)){
+											found = true;
+											break;
+										}
+									}
+									if(found == false){
+										System.out.println("Error: library location does not match iTunes database");
+										return null;
+									}
+									
+									subLocationPattern = Pattern.compile(libraryPathCandidate + "(.*)");
+									firstFile = false;
 								}
 								//System.out.println(location);
 								//get the location of the file relative to the library folder
