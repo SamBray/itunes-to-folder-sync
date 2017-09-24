@@ -260,22 +260,24 @@ public class SyncCheckedSongs {
 								if(firstFile){
 									//set up the subLocationPattern
 									//find the name of the directory storing the library
-									Pattern libraryFolderPattern = Pattern.compile(".*/(.[^/]*/)$");
+									Pattern libraryFolderPattern = Pattern.compile(".*/([^/]*/)$");
 									m = libraryFolderPattern.matcher(libraryPath);
 									m.matches();
 									String libraryFolder = m.group(1);
 									//System.out.println("library folder is " + libraryFolder);
 									//find the path of the library folder relative to the full path in iTunes
 									Pattern findLibraryFolderInLocation = Pattern.compile("(.*" + libraryFolder + ").*");
+									//System.out.println(location);
 									m = findLibraryFolderInLocation.matcher(location);
 									String libraryPathCandidate = "";
 									boolean found = false;
-									while(m.find()){
+									while(m.matches() && !found){
 										libraryPathCandidate = m.group(1);
 										//System.out.println(libraryPathCandidate);
-										if(libraryPath.contains(libraryPathCandidate)){
+										if(libraryPath.contains(libraryPathCandidate))
 											found = true;
-											break;
+										else {
+											m = findLibraryFolderInLocation.matcher(libraryPathCandidate.substring(0, libraryPathCandidate.length() - 1));
 										}
 									}
 									if(found == false){
