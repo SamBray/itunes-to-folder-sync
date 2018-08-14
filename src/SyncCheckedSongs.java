@@ -169,7 +169,7 @@ public class SyncCheckedSongs {
 					}
 				}
 			}
-			//at this point we are left with only things that did not already exist in the library
+			//at this point we are left with only things that did not already exist in the sync folder
 			Iterator<Map.Entry<String,Object>> itemsToCopy = library.entrySet().iterator();
 			while(itemsToCopy.hasNext()) {
 				Map.Entry<String, Object> currentEntry = itemsToCopy.next();
@@ -177,7 +177,10 @@ public class SyncCheckedSongs {
 				String newFromPath = fromPath + currentEntry.getKey();
 				if(newToPath.endsWith("/")) {
 					//this is a directory - create it in destination directory
-					Files.createDirectory(Paths.get(newToPath));
+					if(Files.notExists(Paths.get(newToPath)))
+						//not an error if it already exists - could be different case on
+						//case-insensitive OS!
+						Files.createDirectory(Paths.get(newToPath));
 					//recurse
 					@SuppressWarnings("unchecked")
 					HashMap<String, Object> subLibrary = (HashMap<String, Object>) currentEntry.getValue();
@@ -191,7 +194,7 @@ public class SyncCheckedSongs {
 					}catch(NoSuchFileException f){System.out.println("Sync Error: " + f);}
 				}
 			}
-		}catch(Exception e) {System.out.println("Sync Error: " + e);}
+		}catch(Exception e) {System.out.println("Sync Failure: " + e);}
 	}
 	
 	public static HashMap<String, Object> readItunesLibrary(String itunesPath, String libraryPath) throws IOException
